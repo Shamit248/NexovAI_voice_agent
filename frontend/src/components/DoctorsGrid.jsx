@@ -1,159 +1,130 @@
 import React, { useState, useMemo } from 'react';
-import { Stethoscope, Star, Clock, Search, ChevronRight, UserCheck } from 'lucide-react';
+import { Search, Clock, Calendar, Star, Stethoscope, ChevronRight } from 'lucide-react';
 
 export function DoctorsGrid({ doctors = [], slots = [], onSelectSlot }) {
-  const [selectedSpecialty, setSelectedSpecialty] = useState('ALL');
-  const [selectedDate, setSelectedDate] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSpecialty, setSelectedSpecialty] = useState('ALL');
 
-  const specialties = [
-    { id: 'ALL', label: 'All Departments' },
-    { id: 'Cardiology', label: 'Cardiology' },
-    { id: 'Dermatology', label: 'Dermatology' },
-    { id: 'General Medicine', label: 'General Medicine' },
-    { id: 'Orthopedics', label: 'Orthopedics' },
-    { id: 'Pediatrics', label: 'Pediatrics' },
-  ];
+  const specialties = ['ALL', 'Cardiology', 'Dermatology', 'General Medicine', 'Orthopedics', 'Pediatrics'];
 
   const filteredDoctors = useMemo(() => {
     return doctors.filter(doc => {
-      const matchSpec = selectedSpecialty === 'ALL' || doc.specialty.toLowerCase() === selectedSpecialty.toLowerCase();
-      const matchSearch = searchQuery.trim() === '' || 
-        doc.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      const matchesSpec = selectedSpecialty === 'ALL' || doc.specialty.toLowerCase() === selectedSpecialty.toLowerCase();
+      const matchesSearch = !searchQuery || 
+        doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         doc.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
         doc.hospital.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchSpec && matchSearch;
+      return matchesSpec && matchesSearch;
     });
   }, [doctors, selectedSpecialty, searchQuery]);
 
   return (
     <div className="space-y-4">
-      {/* Search and Department Filter Bar */}
-      <div className="clinical-panel rounded-xl p-3 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        {/* Search input */}
-        <div className="relative flex-1">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search physician name, specialty, or clinic..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500/50"
-          />
-        </div>
-
-        {/* Date Filter Tabs */}
-        <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-xs self-start md:self-auto">
-          {['ALL', 'Today', 'Tomorrow'].map((d) => (
+      {/* Controls Bar: Search & Department Tabs */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        
+        {/* Specialty Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          {specialties.map(spec => (
             <button
-              key={d}
-              onClick={() => setSelectedDate(d)}
-              className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-                selectedDate === d
-                  ? 'bg-slate-800 text-slate-100 font-semibold'
-                  : 'text-slate-400 hover:text-slate-300'
+              key={spec}
+              onClick={() => setSelectedSpecialty(spec)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
+                selectedSpecialty === spec
+                  ? 'bg-amber-50 text-[#78350f] border border-amber-300 font-semibold shadow-xs'
+                  : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
               }`}
             >
-              {d === 'ALL' ? 'All Dates' : d}
+              {spec === 'ALL' ? 'All Specialists' : spec}
             </button>
           ))}
         </div>
+
+        {/* Search Input */}
+        <div className="relative min-w-[240px]">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search physician or clinic..."
+            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3.5 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all shadow-xs"
+          />
+        </div>
+
       </div>
 
-      {/* Specialty Filter Pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-        {specialties.map(spec => (
-          <button
-            key={spec.id}
-            onClick={() => setSelectedSpecialty(spec.id)}
-            className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
-              selectedSpecialty === spec.id
-                ? 'bg-teal-500/15 text-teal-300 border border-teal-500/40 font-semibold'
-                : 'bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-slate-300 border border-slate-800'
-            }`}
-          >
-            {spec.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Physician Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+      {/* Physician Dossiers Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredDoctors.map(doctor => {
-          let docSlots = slots.filter(s => s.doctor_id === doctor.id);
-          if (selectedDate !== 'ALL') {
-            docSlots = docSlots.filter(s => s.date.toLowerCase().includes(selectedDate.toLowerCase()));
-          }
+          const docSlots = slots.filter(s => s.doctor_id === doctor.id);
           const availableSlots = docSlots.filter(s => s.is_available === 1);
 
           return (
             <div
               key={doctor.id}
-              className="clinical-panel rounded-xl p-4 flex flex-col justify-between hover:border-slate-700 transition-all"
+              className="luxury-card rounded-2xl p-5 flex flex-col justify-between"
             >
+              {/* Doctor Profile Dossier */}
               <div>
-                {/* Header Profile */}
-                <div className="flex items-start gap-3 mb-3">
+                <div className="flex items-start gap-3.5 mb-3">
                   <img
                     src={doctor.avatar_url}
                     alt={doctor.name}
-                    className="w-12 h-12 rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                    className="w-13 h-13 rounded-xl object-cover border border-amber-200/80 shadow-xs flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <h4 className="text-sm font-bold text-slate-100 truncate">{doctor.name}</h4>
-                      <span className="flex items-center gap-0.5 text-[11px] font-mono text-amber-400 bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/20">
-                        <Star className="w-2.5 h-2.5 fill-amber-400" />
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-serif text-sm font-bold text-slate-900 truncate">{doctor.name}</h4>
+                      <span className="flex items-center gap-1 text-[11px] font-mono font-semibold text-[#78350f] bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/80">
+                        <Star className="w-3 h-3 fill-[#b48346] text-[#b48346]" />
                         {doctor.rating}
                       </span>
                     </div>
-                    <p className="text-xs font-semibold text-teal-400">{doctor.specialty}</p>
-                    <p className="text-[11px] text-slate-400 truncate">{doctor.hospital} • {doctor.experience}</p>
+                    <p className="text-xs font-semibold text-[#926c35] mt-0.5">{doctor.specialty}</p>
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{doctor.hospital} • {doctor.experience}</p>
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-3">
+                <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed mb-3.5">
                   {doctor.bio}
                 </p>
               </div>
 
-              {/* Slot Scheduling Section */}
-              <div className="pt-2.5 border-t border-slate-800/80">
-                <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-                  <span className="flex items-center gap-1 font-medium">
-                    <Clock className="w-3 h-3 text-slate-500" /> Next Available Slots:
+              {/* Consultation Slots */}
+              <div className="pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between text-[11px] font-medium text-slate-500 mb-2">
+                  <span className="flex items-center gap-1.5 text-slate-700">
+                    <Clock className="w-3 h-3 text-[#b48346]" /> Available Windows
                   </span>
-                  <span className="font-mono text-xs text-teal-400">
-                    {availableSlots.length} open
+                  <span className="font-mono text-[10px] text-emerald-700 font-semibold">
+                    {availableSlots.length} open of {docSlots.length}
                   </span>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
-                  {docSlots.slice(0, 6).map(slot => (
-                    <button
-                      key={slot.id}
-                      onClick={() => onSelectSlot && onSelectSlot(slot, doctor)}
-                      disabled={slot.is_available === 0}
-                      className={`px-2.5 py-1 rounded text-[11px] font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
-                        slot.is_available === 1
-                          ? 'bg-slate-900 hover:bg-slate-800 text-teal-300 border border-teal-500/30 hover:border-teal-400 active:scale-95'
-                          : 'bg-slate-900/40 text-slate-600 line-through border border-slate-850 cursor-not-allowed opacity-50'
-                      }`}
-                      title={slot.is_available === 1 ? `Click to ask voice agent for this slot (${slot.date} ${slot.time})` : "Slot filled"}
-                    >
-                      <span>{slot.time}</span>
-                      {slot.is_available === 1 && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-                      )}
-                    </button>
-                  ))}
-                  {docSlots.length > 6 && (
-                    <span className="text-[10px] text-slate-500 self-center pl-1 font-mono">
-                      +{docSlots.length - 6} more
-                    </span>
+                  {docSlots.length === 0 ? (
+                    <span className="text-slate-400 text-xs italic">No schedule posted</span>
+                  ) : (
+                    docSlots.map(slot => (
+                      <button
+                        key={slot.id}
+                        onClick={() => slot.is_available === 1 && onSelectSlot(slot, doctor)}
+                        disabled={slot.is_available !== 1}
+                        className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border transition-all ${
+                          slot.is_available === 1
+                            ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200 hover:border-emerald-300 font-semibold cursor-pointer shadow-xs active:scale-95'
+                            : 'bg-slate-100 text-slate-400 border-slate-200 line-through cursor-not-allowed'
+                        }`}
+                        title={slot.is_available === 1 ? `Book ${slot.time} with ${doctor.name}` : 'Slot already booked'}
+                      >
+                        {slot.time}
+                      </button>
+                    ))
                   )}
                 </div>
               </div>
+
             </div>
           );
         })}

@@ -7,47 +7,55 @@ export function StatsBar({ doctors = [], slots = [], appointments = [] }) {
 
   const stats = [
     {
-      label: 'Clinical Specialists',
+      label: 'Specialist Physicians',
       value: doctors.length || 5,
-      note: 'Cardio, Derm, Primary, Ortho, Peds',
-      icon: Users
+      note: 'Cardiology, Dermatology, Ortho, Peds',
+      icon: Users,
+      accent: 'text-[#b48346]',
+      bgAccent: 'bg-amber-50 border-amber-200/80'
     },
     {
       label: 'Open Appointment Slots',
       value: availableSlotsCount,
-      note: 'Live database sync',
-      icon: Clock
+      note: 'Live real-time ledger sync',
+      icon: Clock,
+      accent: 'text-emerald-700',
+      bgAccent: 'bg-emerald-50 border-emerald-200/80'
     },
     {
-      label: 'Active Confirmed Bookings',
+      label: 'Confirmed Registrations',
       value: confirmedAptsCount,
-      note: 'Verified by caller phone',
-      icon: CalendarCheck
+      note: 'Spoken phone number verified',
+      icon: CalendarCheck,
+      accent: 'text-[#926c35]',
+      bgAccent: 'bg-amber-50 border-amber-200/80'
     },
     {
-      label: 'Audio Pipeline Target',
+      label: 'Voice Engine Latency',
       value: '< 420 ms',
-      note: 'Full-duplex WebSocket stream',
-      icon: Zap
+      note: 'ElevenLabs + Gemini 2.5 Flash',
+      icon: Zap,
+      accent: 'text-slate-700',
+      bgAccent: 'bg-slate-100 border-slate-200'
     }
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
       {stats.map((stat, i) => {
         const Icon = stat.icon;
         return (
           <div 
             key={i} 
-            className="clinical-panel rounded-xl p-3.5 flex items-center justify-between"
+            className="luxury-card rounded-2xl p-4 flex items-center justify-between"
           >
             <div>
-              <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{stat.label}</p>
-              <div className="text-xl font-bold font-mono text-slate-100 mt-0.5">{stat.value}</div>
+              <p className="text-[10px] font-mono font-semibold text-slate-400 uppercase tracking-wider">{stat.label}</p>
+              <div className="text-2xl font-serif font-bold text-slate-900 mt-0.5">{stat.value}</div>
               <p className="text-[11px] text-slate-500 mt-0.5 truncate">{stat.note}</p>
             </div>
-            <div className="w-9 h-9 rounded-lg bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300 flex-shrink-0">
-              <Icon className="w-4 h-4 text-teal-400" />
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${stat.accent} ${stat.bgAccent} shadow-xs`}>
+              <Icon className="w-4.5 h-4.5" />
             </div>
           </div>
         );

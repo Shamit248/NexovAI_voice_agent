@@ -1,65 +1,65 @@
 import React from 'react';
-import { CheckCircle2, Calendar, Clock, Phone, Stethoscope, Hash } from 'lucide-react';
+import { CheckCircle2, Calendar, Clock, Phone, Stethoscope } from 'lucide-react';
 
 export function BookingModalCard({ appointment, onClose }) {
   if (!appointment) return null;
 
   return (
-    <div className="bg-slate-900/95 border border-teal-500/40 rounded-2xl p-4 shadow-2xl backdrop-blur-xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-      {/* Decorative top ribbon */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-cyan-400 to-emerald-400" />
+    <div className="bg-white border border-amber-300 rounded-2xl p-4 shadow-md relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      {/* Specular Top Gold Highlight */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#b48346] via-[#fef3c7] to-[#059669]" />
 
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+      <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center">
-            <CheckCircle2 className="w-4 h-4" />
+          <div className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200">
+            <CheckCircle2 className="w-3.5 h-3.5" />
           </div>
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-teal-400">Appointment Confirmed</h4>
-            <p className="text-[11px] text-slate-400">Ref: {appointment.appointment_id}</p>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-[#78350f] font-bold">Appointment Confirmed</span>
+            <p className="text-[11px] font-mono text-slate-500">Ref: {appointment.appointment_id}</p>
           </div>
         </div>
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+        <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
           CONFIRMED
         </span>
       </div>
 
-      <div className="py-3 space-y-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400 flex items-center gap-1.5">
-            <Stethoscope className="w-3.5 h-3.5 text-teal-400" /> Doctor:
+      <div className="py-2.5 space-y-2 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500 text-[11px] flex items-center gap-1.5">
+            <Stethoscope className="w-3.5 h-3.5 text-[#b48346]" /> Attending Physician:
           </span>
-          <span className="font-semibold text-slate-200">{appointment.doctor_name}</span>
+          <span className="font-serif font-bold text-slate-900 text-[13px]">{appointment.doctor_name}</span>
         </div>
 
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400 flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-cyan-400" /> Date:
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500 text-[11px] flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" /> Date:
           </span>
-          <span className="font-medium text-slate-200">{appointment.date}</span>
+          <span className="text-slate-700 font-medium">{appointment.date}</span>
         </div>
 
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400 flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-teal-400" /> Time:
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500 text-[11px] flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-emerald-600" /> Scheduled Window:
           </span>
-          <span className="font-mono font-semibold text-teal-300">{appointment.time}</span>
+          <span className="font-mono font-bold text-emerald-700">{appointment.time}</span>
         </div>
 
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400 flex items-center gap-1.5">
-            <Phone className="w-3.5 h-3.5 text-indigo-400" /> Patient Phone:
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500 text-[11px] flex items-center gap-1.5">
+            <Phone className="w-3.5 h-3.5 text-[#b48346]" /> Verified Contact:
           </span>
-          <span className="font-mono text-slate-200">{appointment.phone_number}</span>
+          <span className="font-mono text-slate-800 font-medium">{appointment.phone_number}</span>
         </div>
       </div>
 
-      <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-        <span>Synced with Clinic Ledger</span>
+      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+        <span>Recorded in Clinic Ledger</span>
         {onClose && (
           <button 
             onClick={onClose}
-            className="text-teal-400 hover:text-teal-300 font-medium cursor-pointer"
+            className="text-[#78350f] hover:text-amber-800 font-semibold cursor-pointer"
           >
             Dismiss
           </button>
