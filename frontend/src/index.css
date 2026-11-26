@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #070b14;
+    color: #e2e8f0;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+}
+
+/* Hairline scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #070b14;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Hardware Phone Shell */
+.phone-shell {
+  background: linear-gradient(145deg, #131b2e, #090e1a);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    0 20px 50px -10px rgba(0, 0, 0, 0.9),
+    0 0 40px -15px rgba(20, 184, 166, 0.15);
+}
+
+/* Clinical Panel */
+.clinical-card {
+  background: #0c1220;
+  border: 1px solid #162035;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clinical-card:hover {
+  border-color: rgba(20, 184, 166, 0.4);
+  background: #0e1626;
+}
+
+/* Real-time row flash animation */
+@keyframes rowPulseGlow {
+  0% {
+    background-color: rgba(16, 185, 129, 0.28);
+    box-shadow: inset 0 0 15px rgba(16, 185, 129, 0.3);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.animate-row-flash {
+  animation: rowPulseGlow 2.5s ease-out forwards;
+}
