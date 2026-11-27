@@ -46,3 +46,11 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Video recordings & scripts
+VIDEO_DEMO_SCRIPT.md
+*.mp4
+*.mov
+*.webm
+*.mkv
+
