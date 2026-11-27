@@ -75,6 +75,50 @@ flowchart TD
 
 ### 2. Conversational State Machine & Clinical Verification Flow
 
+Nexa operates on a deterministic clinical state machine designed to eliminate hallucinations, enforce phone number verification, and guarantee atomic database transactions.
+
+#### State Machine Architecture
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE : Connection Ready
+    IDLE --> RINGING : Incoming Call / "Initiate Voice Session"
+    RINGING --> GREETING : WebSocket Handshake (16kHz PCM Stream)
+    GREETING --> INTENT_DISCOVERY : Initial Prompt Spoken
+    
+    INTENT_DISCOVERY --> CHECKING_AVAILABILITY : "Check Dr. Chen's availability" / Specialty query
+    CHECKING_AVAILABILITY --> INTENT_DISCOVERY : Tool check_doctor_availability executed & options offered
+
+    INTENT_DISCOVERY --> EXTRACTING_PHONE : "Book 9:30 AM slot" (Missing phone)
+    EXTRACTING_PHONE --> AWAITING_CONFIRMATION : Spoken digits received & normalized
+    
+    INTENT_DISCOVERY --> AWAITING_CONFIRMATION : "Book 9:30 AM for 555-0199" (Phone provided)
+    
+    state AWAITING_CONFIRMATION {
+        [*] --> READBACK_PROMPT : Agent speaks "Your number is 555-0199, is that correct?"
+        READBACK_PROMPT --> CONFIRMED_YES : Caller: "Yes" / "Correct" / "Confirm"
+        READBACK_PROMPT --> REJECTED_NO : Caller: "No, that's wrong" / corrected number
+        REJECTED_NO --> [*] : Rollback to INTENT_DISCOVERY
+    }
+
+    CONFIRMED_YES --> EXECUTING_MUTATION : Atomic DB transaction initiated
+    
+    state EXECUTING_MUTATION {
+        [*] --> ACQUIRE_LOCK : Begin Immediate Transaction
+        ACQUIRE_LOCK --> UPDATE_SLOT : Mark slot is_available=0
+        UPDATE_SLOT --> INSERT_APPOINTMENT : Generate Ref APT-XXXXXX
+        INSERT_APPOINTMENT --> BROADCAST_WEBSOCKET : Emit real-time event to /ws/dashboard
+        BROADCAST_WEBSOCKET --> [*]
+    }
+
+    EXECUTING_MUTATION --> SUCCESS_ANNOUNCED : Spoken voucher & in-phone pass displayed
+    SUCCESS_ANNOUNCED --> INTENT_DISCOVERY : "Can I help with anything else?"
+    INTENT_DISCOVERY --> CALL_ENDED : Caller hangup / "No, thank you"
+    CALL_ENDED --> [*] : Audio streams released
+```
+
+#### End-to-End Sequence & Real-Time Sync
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -92,18 +136,44 @@ sequenceDiagram
     Agent-->>Patient: "Dr. Sarah Chen has openings today at 9:30 AM and 11:00 AM. Would one work?"
 
     Patient->>Agent: "Book 9:30 AM for phone 555-0199"
-    Note over Agent: MANDATORY CONFIRMATION RULE
+    Note over Agent: MANDATORY CONFIRMATION RULE (Zero DB writes permitted yet)
     Agent-->>Patient: "Just to make sure I have that recorded correctly, your phone number is 555-0199, is that correct?"
     
     Patient->>Agent: "Yes, that is correct."
     Agent->>Tool: book_appointment(phone="555-0199", doctor="Dr. Sarah Chen", slot="09:30 AM")
-    Tool->>DB: UPDATE slots SET is_available=0; INSERT INTO appointments (APT-..., CONFIRMED)
+    Tool->>DB: BEGIN IMMEDIATE; UPDATE slots SET is_available=0; INSERT INTO appointments; COMMIT;
     DB-->>Tool: Success (Ref: APT-261127-9007)
     Tool->>Dash: broadcast("appointment_booked", appointment)
-    Dash-->>Dash: Highlight row in amber, strike through 9:30 AM slot
+    Dash-->>Dash: Flash row in warm amber, lock 9:30 AM slot, update KPI counter
     Tool-->>Agent: Confirmation Details
     Agent-->>Patient: "Your appointment is confirmed under reference APT-261127-9007! Can I help with anything else?"
 ```
+
+#### Deterministic State Transition & Guard Matrix
+
+| Current State | Spoken Input / Event | Guard Condition | Next State | System Actions & Side Effects |
+| :--- | :--- | :--- | :--- | :--- |
+| **`IDLE`** | Click *"Initiate Voice Session"* | WebSocket connected | **`RINGING`** | Synthesize 440Hz+480Hz telephony ring cadence via Web Audio API. |
+| **`RINGING`** | Handshake finalized | AudioContext active | **`GREETING`** | Play connected chime; send initial greeting speech packet. |
+| **`GREETING`** | Greeting audio finishes | Speech synthesis ended | **`INTENT_DISCOVERY`** | Activate `Silero VAD` & 1000ms end-of-speech debounce window. |
+| **`INTENT_DISCOVERY`** | *"Check slots for Cardiology"* | Specialty identified | **`CHECKING_AVAILABILITY`** | Execute `check_doctor_availability`; return 2 available morning/afternoon slots. |
+| **`INTENT_DISCOVERY`** | *"Book 9:30 AM for 555-0199"* | Slot + Phone parsed | **`AWAITING_CONFIRMATION`** | Normalize phone to `555-0199`; cache booking intent in memory. **DB write locked.** |
+| **`INTENT_DISCOVERY`** | *"Book 9:30 AM with Dr. Chen"* | Phone number missing | **`EXTRACTING_PHONE`** | Prompt caller: *"What phone number should I put on the reservation?"* |
+| **`EXTRACTING_PHONE`** | Caller speaks digits | $\ge 7$ digits extracted | **`AWAITING_CONFIRMATION`** | Format as `XXX-XXXX`; transition to mandatory readback confirmation. |
+| **`AWAITING_CONFIRMATION`**| *"Yes" / "Correct" / "Confirm"* | Verbal affirmation | **`EXECUTING_MUTATION`** | Execute `book_appointment`; commit atomic DB transaction; broadcast WebSocket update. |
+| **`AWAITING_CONFIRMATION`**| *"No, that's wrong" / "Cancel"* | Affirmation absent | **`INTENT_DISCOVERY`** | Purge cached pending data; prompt caller to re-enter number. **Zero DB writes.** |
+| **`INTENT_DISCOVERY`** | *"Cancel my appointment for 555-0199"*| Cancellation intent | **`AWAITING_CONFIRMATION`** | Readback: *"Just to confirm, you want to cancel the booking for 555-0199?"* |
+| **`AWAITING_CONFIRMATION`**| *"Yes, cancel it"* | Cancellation affirmed | **`EXECUTING_MUTATION`** | Execute `cancel_appointment`; mark status `CANCELLED`; release slot (`is_available=1`). |
+| **`EXECUTING_MUTATION`** | Mutation completed | Transaction committed | **`SUCCESS_ANNOUNCED`** | Trigger confirmation sound; render in-phone pass; speak reference ID. |
+| **`ANY`** | Click *"End Call"* / Disconnect | Call in progress | **`IDLE`** | Teardown audio contexts; stop VAD; flush buffers; synthesize hangup tone. |
+
+#### Spoken Digits Extraction & Normalization Engine
+
+In compliance with the **no-login / no-OTP** requirement, callers are identified strictly by voice. The backend features a dual-layer extraction regex and phoneme converter that normalizes varied spoken patterns:
+- Natural word numbers: *"five five five zero one nine nine"* $\rightarrow$ `5550199`
+- Punctuation & spaces: *"five-five-five, zero one nine nine"* $\rightarrow$ `5550199`
+- Hyphenated format: *"555 0199"* $\rightarrow$ `555-0199`
+- Leading country codes (`+1`, `1-`) are automatically stripped so database queries consistently index the subscriber number.
 
 ---
 
@@ -114,8 +184,15 @@ sequenceDiagram
 - **Why:** Avoids external WebRTC signaling bottlenecks (e.g., Daily.co or Twilio credentials), eliminates network round-trip hops, and guarantees zero third-party dependencies for evaluation.
 
 ### 2. Voice Activity Detection (Silero VAD Tuning)
-- **Decision:** Tuned `SileroVADAnalyzer` with `VADParams(confidence=0.7, stop_secs=0.8, start_secs=0.2)`.
-- **Why:** The default silence stop threshold of `0.2s` prematurely cut off callers mid-sentence whenever they took a natural breath. Raising `stop_secs` to `0.8s` provides a natural human conversational cadence.
+
+| Parameter | Pipecat Default | FDE Tuned Setting | Clinical Rationale |
+| :--- | :--- | :--- | :--- |
+| **`stop_secs`** | `0.20s` (200ms) | **`0.80s` (800ms)** | The default 200ms cuts callers off mid-thought whenever they take a natural breath. 800ms enables relaxed human turn-taking. |
+| **`start_secs`** | `0.20s` (200ms) | **`0.20s` (200ms)** | Ensures instant voice detection as soon as the caller speaks the first syllable. |
+| **`confidence`** | `0.70` | **`0.70`** | Rejects ambient HVAC and microphone hiss while keeping detection sensitivity high. |
+| **`min_volume`** | `0.60` | **`0.60`** | Prevents background room clatter from accidentally triggering the speech pipeline. |
+
+- **Client-Side Speech Debounce:** Paired with a client-side **1000ms End-of-Speech Debounce Window** (`speechSilenceTimerRef`) with `interimResults = true`. While the caller is actively speaking, the timer continuously resets, preventing partial fragments from triggering premature LLM responses.
 
 ### 3. Dual-Layer Acoustic Echo Cancellation (AEC)
 - **Problem:** Microphone capture frequently hears the computer speaker playing the agent's greeting, leading to recursive self-hearing loops.
