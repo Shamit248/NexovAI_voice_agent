@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from app.config import settings
 from app.database import init_db
 from app.routes.doctors import router as doctors_router
@@ -34,6 +35,19 @@ app.include_router(call_router)
 # Mount frontend build static directory if built
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend", "dist")
 if os.path.exists(frontend_dist):
+    index_file = os.path.join(frontend_dist, "index.html")
+    
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(
+            index_file,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
+        
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
 else:
     @app.get("/")
@@ -51,3 +65,4 @@ else:
                 "status": "/api/status"
             }
         }
+

@@ -15,8 +15,12 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
   const audioCtxRef = useRef(null);
   const micStreamRef = useRef(null);
   const processorRef = useRef(null);
+  const silenceGainRef = useRef(null);
   const timerRef = useRef(null);
   const isMutedRef = useRef(false);
+  const isAgentSpeakingRef = useRef(false);
+  const lastUtteranceTimeRef = useRef(0);
+  const lastUtteranceTextRef = useRef('');
   const nextPlayTimeRef = useRef(0);
   const recognitionRef = useRef(null);
 
@@ -30,7 +34,7 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
 
   isMutedRef.current = isMuted;
 
-  // Initialize Speech Recognition fallback if available
+  // Initialize Speech Recognition fallback with Echo-Cancellation
   useEffect(() => {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRec) {
@@ -38,16 +42,57 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
       rec.continuous = true;
       rec.interimResults = false;
       rec.lang = 'en-US';
+
       rec.onresult = (e) => {
+        // Prevent acoustic feedback: NEVER process mic while agent's speaker is outputting
+        if (isAgentSpeakingRef.current) {
+          console.debug('[Echo Suppression] Discarded mic capture during agent speech');
+          return;
+        }
+        if (isMutedRef.current) return;
+
         const last = e.results.length - 1;
-        const text = e.results[last][0].transcript.trim();
-        if (text && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const result = e.results[last];
+        if (!result || !result[0]) return;
+
+        const text = result[0].transcript.trim();
+        // Ignore empty, single characters, or trivial background noise
+        if (!text || text.length < 2) return;
+
+        // Prevent duplicate trigger bursts of the exact same utterance within 2.5s
+        const now = Date.now();
+        if (
+          text.toLowerCase() === lastUtteranceTextRef.current.toLowerCase() &&
+          now - lastUtteranceTimeRef.current < 2500
+        ) {
+          return;
+        }
+
+        lastUtteranceTextRef.current = text;
+        lastUtteranceTimeRef.current = now;
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ type: 'user_text', text }));
         }
       };
+
       rec.onerror = (e) => {
-        console.debug('Speech recognition notice:', e.error);
+        console.debug('Speech recognition status:', e.error);
       };
+
+      // Auto-restart recognition if disconnected while call is active
+      rec.onend = () => {
+        if (
+          !isAgentSpeakingRef.current &&
+          wsRef.current &&
+          wsRef.current.readyState === WebSocket.OPEN
+        ) {
+          try {
+            rec.start();
+          } catch (err) {}
+        }
+      };
+
       recognitionRef.current = rec;
     }
   }, []);
@@ -66,11 +111,14 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
     };
   }, [callState]);
 
-  // Audio queue player for incoming PCM binary chunks
+  // Audio queue player for incoming PCM binary chunks (ElevenLabs TTS)
   const playAudioChunk = useCallback((arrayBuffer) => {
     if (!audioCtxRef.current) return;
     const ctx = audioCtxRef.current;
     
+    isAgentSpeakingRef.current = true;
+    setAgentStatus('speaking');
+
     // Convert 16-bit PCM bytes to Float32
     const int16 = new Int16Array(arrayBuffer);
     const float32 = new Float32Array(int16.length);
@@ -97,33 +145,64 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
     const startTime = Math.max(currentTime, nextPlayTimeRef.current);
     source.start(startTime);
     nextPlayTimeRef.current = startTime + audioBuffer.duration;
+
+    // Monitor when the audio stream queue is exhausted
+    source.onended = () => {
+      if (ctx.currentTime >= nextPlayTimeRef.current - 0.08) {
+        setAudioLevel(0);
+        setAgentStatus('listening');
+        setTimeout(() => {
+          isAgentSpeakingRef.current = false;
+        }, 500);
+      }
+    };
   }, []);
 
-  // Browser Text-To-Speech fallback for simulator mode
+  // Browser Text-To-Speech fallback for simulator mode with Echo Cancellation
   const speakText = useCallback((text) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
+      isAgentSpeakingRef.current = true;
+      setAgentStatus('speaking');
+
+      // Abort speech recognition during agent speech to avoid microphone picking up speakers
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.05;
       utterance.pitch = 1.0;
       
       // Animate waveform while speaking
-      setAgentStatus('speaking');
       const waveInterval = setInterval(() => {
-        setAudioLevel(0.3 + Math.random() * 0.5);
+        setAudioLevel(0.25 + Math.random() * 0.45);
       }, 80);
 
-      utterance.onend = () => {
+      const finishSpeaking = () => {
         clearInterval(waveInterval);
         setAudioLevel(0);
         setAgentStatus('listening');
+
+        // Allow 700ms grace period for physical acoustic reverberations to clear
+        setTimeout(() => {
+          isAgentSpeakingRef.current = false;
+          if (
+            recognitionRef.current &&
+            wsRef.current?.readyState === WebSocket.OPEN &&
+            !isMutedRef.current
+          ) {
+            try {
+              recognitionRef.current.start();
+            } catch (e) {}
+          }
+        }, 700);
       };
-      
-      utterance.onerror = () => {
-        clearInterval(waveInterval);
-        setAudioLevel(0);
-        setAgentStatus('listening');
-      };
+
+      utterance.onend = finishSpeaking;
+      utterance.onerror = finishSpeaking;
 
       window.speechSynthesis.speak(utterance);
     }
@@ -164,18 +243,21 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
               sampleRate: 16000,
               channelCount: 1,
               echoCancellation: true,
-              noiseSuppression: true
+              noiseSuppression: true,
+              autoGainControl: true
             }
           });
           micStreamRef.current = stream;
 
           const source = ctx.createMediaStreamSource(stream);
-          // Script processor to capture PCM audio chunks
+          // Script processor to capture PCM audio chunks (2048 samples = 128ms @ 16kHz)
           const processor = ctx.createScriptProcessor(2048, 1, 1);
           processorRef.current = processor;
 
           processor.onaudioprocess = (e) => {
-            if (isMutedRef.current) return;
+            // Mute or agent speech suppression
+            if (isMutedRef.current || isAgentSpeakingRef.current) return;
+
             const inputData = e.inputBuffer.getChannelData(0);
             
             // Calculate caller voice level for waveform
@@ -197,13 +279,25 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
             }
           };
 
-          source.connect(processor);
-          processor.connect(ctx.destination);
+          // CRITICAL FIX: Route mic processor through a ZERO GAIN node.
+          // This keeps the ScriptProcessor alive without playing mic audio back into speakers!
+          const silenceGain = ctx.createGain();
+          silenceGain.gain.value = 0;
+          silenceGainRef.current = silenceGain;
 
-          // Start speech recognition fallback
-          if (recognitionRef.current) {
-            try { recognitionRef.current.start(); } catch (e) {}
-          }
+          source.connect(processor);
+          processor.connect(silenceGain);
+          silenceGain.connect(ctx.destination);
+
+          // Start speech recognition fallback (with a 800ms delay to let initial greeting speak)
+          setTimeout(() => {
+            if (recognitionRef.current && !isAgentSpeakingRef.current) {
+              try {
+                recognitionRef.current.start();
+              } catch (e) {}
+            }
+          }, 800);
+
         } catch (err) {
           console.warn("Microphone access declined or unavailable; text/chips remain active:", err);
         }
@@ -258,12 +352,17 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
   // Clean up media streams and audio nodes
   const cleanupMedia = useCallback(() => {
     stopRinging();
+    isAgentSpeakingRef.current = false;
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) {}
     }
     if (processorRef.current) {
       processorRef.current.disconnect();
       processorRef.current = null;
+    }
+    if (silenceGainRef.current) {
+      silenceGainRef.current.disconnect();
+      silenceGainRef.current = null;
     }
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach(t => t.stop());

@@ -23,6 +23,8 @@ class ClinicalConversationSimulator:
         self.pending_action = None  # "BOOK" or "CANCEL"
         self.pending_data = {}      # {doctor, time, date, phone}
         self.caller_phone = None
+        self.last_spoken_text = ""
+        self.last_spoken_time = 0.0
 
     async def send(self, payload: dict):
         try:
@@ -31,6 +33,11 @@ class ClinicalConversationSimulator:
             pass
 
     async def speak(self, text: str):
+        self.last_spoken_text = text.lower()
+        try:
+            self.last_spoken_time = asyncio.get_event_loop().time()
+        except Exception:
+            self.last_spoken_time = 0.0
         await self.send({
             "type": "transcript",
             "role": "agent",
@@ -68,6 +75,20 @@ class ClinicalConversationSimulator:
 
     async def handle_user_utterance(self, text: str):
         text_clean = text.strip().lower()
+        if not text_clean or len(text_clean) < 2:
+            return
+
+        # Acoustic Echo Suppression: filter out speaker playback caught by mic
+        try:
+            now = asyncio.get_event_loop().time()
+        except Exception:
+            now = 0.0
+
+        if (now - self.last_spoken_time) < 4.0:
+            if text_clean in self.last_spoken_text or (len(text_clean) > 5 and text_clean in ["hello", "hello!", "how can i help", "nexov health"]):
+                logger.warning(f"[Simulator] Suppressed self-echo from speaker: '{text_clean}'")
+                return
+
         logger.info(f"[Simulator Input]: {text_clean}")
         
         await self.send({
@@ -80,7 +101,7 @@ class ClinicalConversationSimulator:
             "type": "status",
             "status": "thinking"
         })
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.4)
 
         # 1. Waiting for Confirmation of Phone Number
         if self.state == "AWAITING_CONFIRMATION":
