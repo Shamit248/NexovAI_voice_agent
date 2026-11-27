@@ -317,7 +317,6 @@ NexovAI_voice_agent/
 ├── .env.example
 ├── .gitignore
 ├── PIPELINE_DESCRIPTION.md            # Short honest pipeline overview for form submission
-├── VIDEO_DEMO_SCRIPT.md               # Minute-by-minute 3-minute video recording script
 └── README.md                          # Architectural documentation & technical guide
 ```
 
@@ -338,8 +337,6 @@ NexovAI_voice_agent/
   - Real-time row-glow animation on new bookings/cancellations.
   - Synthesized Web Audio API telephony ringing and chime sound effects.
 - [x] **Automated Tests:** 7/7 end-to-end tests passing (`test_flow.py`).
-- [x] **Submission Package:** [PIPELINE_DESCRIPTION.md](file:///c:/Users/LOQ/Desktop/NevoxAI/PIPELINE_DESCRIPTION.md) and [VIDEO_DEMO_SCRIPT.md](file:///c:/Users/LOQ/Desktop/NevoxAI/VIDEO_DEMO_SCRIPT.md).
-
 ---
 
 **Candidate:** Shamit Bundela  
