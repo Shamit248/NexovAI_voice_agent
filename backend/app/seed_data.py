@@ -37,7 +37,7 @@ def seed_database(conn: sqlite3.Connection):
             4.98,
             "16 years",
             "Comprehensive adult care, preventative medicine, diabetes, and metabolic health.",
-            "https://images.unsplash.com/photo-1594824813515-54602506e7ee?auto=format&fit=crop&q=80&w=300"
+            "https://images.unsplash.com/photo-1651008376811-b90baee60c1f?auto=format&fit=crop&q=80&w=300"
         ),
         (
             "doc-4",

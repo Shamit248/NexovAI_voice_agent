@@ -71,6 +71,10 @@ export function DoctorsGrid({ doctors = [], slots = [], onSelectSlot }) {
                   <img
                     src={doctor.avatar_url}
                     alt={doctor.name}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://images.unsplash.com/photo-1651008376811-b90baee60c1f?auto=format&fit=crop&q=80&w=300';
+                    }}
                     className="w-13 h-13 rounded-xl object-cover border border-amber-200/80 shadow-xs flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
