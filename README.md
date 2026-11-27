@@ -1,8 +1,5 @@
 # Nexov Health — Executive Clinical Voice AI Booking Suite
-
-**Candidate:** Shamit Bundela  
-**Role:** Forward Deployed Engineer (FDE) / SDE Internship  
-**Submission:** Round 1 Assignment — Voice AI Doctor Appointment Booking Agent  
+ 
 **Frameworks:** Pipecat 1.17 • ElevenLabs STT/TTS • Google Gemini 2.5 Flash • Silero VAD (ONNX) • FastAPI • React + Tailwind CSS  
 **Repository:** [https://github.com/Shamit248/NexovAI_voice_agent](https://github.com/Shamit248/NexovAI_voice_agent)
 
