@@ -136,8 +136,17 @@ async def run_pipecat_voice_pipeline(websocket: WebSocket):
         params=transport_params
     )
 
-    # 2. Setup VAD (Bonus: Silero VAD)
-    vad_analyzer = SileroVADAnalyzer(sample_rate=settings.SAMPLE_RATE)
+    # 2. Setup VAD (Bonus: Silero VAD with tuned conversational pause threshold)
+    from pipecat.audio.vad.vad_analyzer import VADParams
+    vad_analyzer = SileroVADAnalyzer(
+        sample_rate=settings.SAMPLE_RATE,
+        params=VADParams(
+            confidence=0.7,
+            start_secs=0.2,
+            stop_secs=0.8,  # 800ms natural conversational pause before concluding caller finished speaking
+            min_volume=0.6
+        )
+    )
     vad_processor = VADProcessor(vad_analyzer=vad_analyzer)
 
     # 3. Setup STT (ElevenLabs Realtime STT)

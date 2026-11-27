@@ -21,6 +21,8 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
   const isAgentSpeakingRef = useRef(false);
   const lastUtteranceTimeRef = useRef(0);
   const lastUtteranceTextRef = useRef('');
+  const pendingSpeechRef = useRef('');
+  const speechSilenceTimerRef = useRef(null);
   const nextPlayTimeRef = useRef(0);
   const recognitionRef = useRef(null);
 
@@ -34,13 +36,13 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
 
   isMutedRef.current = isMuted;
 
-  // Initialize Speech Recognition fallback with Echo-Cancellation
+  // Initialize Speech Recognition fallback with Echo-Cancellation & End-of-Speech Debounce
   useEffect(() => {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRec) {
       const rec = new SpeechRec();
       rec.continuous = true;
-      rec.interimResults = false;
+      rec.interimResults = true;
       rec.lang = 'en-US';
 
       rec.onresult = (e) => {
@@ -51,29 +53,46 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
         }
         if (isMutedRef.current) return;
 
-        const last = e.results.length - 1;
-        const result = e.results[last];
-        if (!result || !result[0]) return;
+        let accumulated = '';
+        for (let i = 0; i < e.results.length; ++i) {
+          accumulated += e.results[i][0].transcript + ' ';
+        }
+        const text = accumulated.trim();
 
-        const text = result[0].transcript.trim();
         // Ignore empty, single characters, or trivial background noise
         if (!text || text.length < 2) return;
 
-        // Prevent duplicate trigger bursts of the exact same utterance within 2.5s
-        const now = Date.now();
-        if (
-          text.toLowerCase() === lastUtteranceTextRef.current.toLowerCase() &&
-          now - lastUtteranceTimeRef.current < 2500
-        ) {
-          return;
+        pendingSpeechRef.current = text;
+
+        // Clear previous silence timer because user is actively speaking or pausing naturally
+        if (speechSilenceTimerRef.current) {
+          clearTimeout(speechSilenceTimerRef.current);
         }
 
-        lastUtteranceTextRef.current = text;
-        lastUtteranceTimeRef.current = now;
+        // Wait for 1000ms of true silence before finalizing user turn to avoid cutting off mid-sentence
+        speechSilenceTimerRef.current = setTimeout(() => {
+          const finalUtterance = pendingSpeechRef.current.trim();
+          pendingSpeechRef.current = '';
 
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: 'user_text', text }));
-        }
+          if (!finalUtterance || finalUtterance.length < 2) return;
+
+          // Prevent duplicate trigger bursts of the exact same utterance within 2.5s
+          const now = Date.now();
+          if (
+            finalUtterance.toLowerCase() === lastUtteranceTextRef.current.toLowerCase() &&
+            now - lastUtteranceTimeRef.current < 2500
+          ) {
+            return;
+          }
+
+          lastUtteranceTextRef.current = finalUtterance;
+          lastUtteranceTimeRef.current = now;
+
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && !isAgentSpeakingRef.current) {
+            console.info('[Speech Dispatched after natural pause]:', finalUtterance);
+            wsRef.current.send(JSON.stringify({ type: 'user_text', text: finalUtterance }));
+          }
+        }, 1000);
       };
 
       rec.onerror = (e) => {
@@ -353,6 +372,11 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
   const cleanupMedia = useCallback(() => {
     stopRinging();
     isAgentSpeakingRef.current = false;
+    if (speechSilenceTimerRef.current) {
+      clearTimeout(speechSilenceTimerRef.current);
+      speechSilenceTimerRef.current = null;
+    }
+    pendingSpeechRef.current = '';
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) {}
     }
@@ -397,6 +421,11 @@ export function useVoiceCall({ onAppointmentBooked, onAppointmentCancelled }) {
 
   // Send quick speech text utterance
   const sendUtterance = useCallback((text) => {
+    if (speechSilenceTimerRef.current) {
+      clearTimeout(speechSilenceTimerRef.current);
+      speechSilenceTimerRef.current = null;
+    }
+    pendingSpeechRef.current = '';
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'user_text', text }));
     }
